@@ -2,6 +2,7 @@ import argparse
 import logging
 import jax.numpy as np
 import neural_tangents as nt
+import os
 import pickle
 import src.utils as utils
 import sys
@@ -9,6 +10,14 @@ from jax import random
 from src.finite import train_and_save
 from src.infinite import compute_and_save
 from src.architecture import define
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+if not os.path.exists('./finite'):
+    os.makedirs('./finite')
+if not os.path.exists('./infinite'):
+    os.makedirs('./infinite')
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,7 +54,7 @@ def parse_args():
     parser.add_argument('--metric_fn', type=str, required=True, choices=['mse', 'MSE', 'geodesic'],
                         help='Chosen metric to output score (not optimize!)')
     args = parser.parse_args()
-    print(args)
+    log.info(args)
     return args
 
 def read_data(args):
@@ -54,7 +63,7 @@ def read_data(args):
         with open(path, 'rb') as fb:
             data = pickle.load(fb)
     else:
-        logging.error('Unrecognized data format. Make sure its in pickle format.')
+        log.error('Unrecognized data format. Make sure its in pickle format.')
         return [None]*6
     trX, trY, valX, valY, testX, testY = utils.split_data(
         np.array(data['features']), np.array(data['target']), seed=args.seed,
@@ -69,13 +78,13 @@ def main():
     elif args.metric_fn in ['mse', 'MSE']:
         validation_metric_fn = utils.mean_squared_error
     key = random.PRNGKey(args.seed)
-    print('Reading and preparing data...')
+    log.info('Reading and preparing data...')
     trX, trY, valX, valY, testX, testY = read_data(args)
     if trX is None:
         return 1
-    print('Defining model functions...')
+    log.info('Defining model functions...')
     init_fn, apply_fn, _, batched_kernel_fn = define(args)
-    print('Training finite network...')
+    log.info('Training finite network...')
     train_and_save(args.num_epochs, args.batch_size,
                    args.learning_rate, init_fn,
                    apply_fn, key, args.filename,
@@ -84,7 +93,7 @@ def main():
                    trX, trY, valX, valY, testX, testY,
                    validation_metric_fn,
                    output_logs=True, params=None, dump=True)
-    print('Computing infinite kernels...')
+    log.info('Computing infinite kernels...')
     compute_and_save(batched_kernel_fn, trX, trY, valX, valY,
                      testX, testY, args.filename,
                      validation_metric_fn, dump=True)
